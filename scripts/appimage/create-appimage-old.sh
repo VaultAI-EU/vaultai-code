@@ -3,7 +3,7 @@ set -e  # Exit on error
 set -x  # Print commands as they are executed
 
 # Configuration
-APP_NAME="void"
+APP_NAME="vault-code"
 APP_VERSION="1.0.0"
 ARCH="x86_64"
 

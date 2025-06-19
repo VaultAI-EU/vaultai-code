@@ -1,0 +1,108 @@
+# VaultCode Development Rules
+
+## Modification des composants React dans VaultCode
+
+### Problème commun
+
+Quand on modifie les fichiers React TypeScript dans `src/vs/workbench/contrib/void/browser/react/src/`, les changements ne sont pas visibles immédiatement dans l'application car le système de build utilise un cache complexe.
+
+### Procédure OBLIGATOIRE pour appliquer les modifications React
+
+**⚠️ IMPORTANT : Suivre ces étapes dans l'ordre exact :**
+
+#### 1. Arrêter tous les processus Electron
+
+```bash
+pkill -f "Electron"
+```
+
+#### 2. Supprimer TOUS les caches de compilation
+
+```bash
+rm -rf src/vs/workbench/contrib/void/browser/react/src2
+rm -rf src/vs/workbench/contrib/void/browser/react/out
+rm -rf out/vs
+```
+
+#### 3. Recompiler les composants React
+
+```bash
+npm run buildreact
+```
+
+#### 4. Recompiler le client principal
+
+```bash
+npm run gulp compile-client
+```
+
+#### 5. Vérifier que les modifications sont dans src2
+
+```bash
+# Vérifier que vos modifications sont bien copiées dans src2
+grep -r "votre_modification" src/vs/workbench/contrib/void/browser/react/src2/
+```
+
+#### 6. Relancer VaultCode
+
+```bash
+./scripts/code.sh
+```
+
+### Explication du système de build
+
+VaultCode utilise un système de build React en 3 étapes :
+
+1. **src/** → Fichiers sources originaux
+2. **src2/** → Fichiers préprocessés avec classes CSS préfixées (`void-`)
+3. **out/** → Fichiers JavaScript compilés finaux
+
+Les modifications dans `src/` ne sont visibles que quand elles sont propagées jusqu'à `out/`.
+
+### Scripts disponibles dans package.json
+
+- `npm run buildreact` : Compile les composants React (src → src2 → out)
+- `npm run watchreact` : Mode watch pour les composants React
+- `npm run compile` : Compilation générale (peut avoir des erreurs avec ipynb)
+- `npm run gulp compile-client` : Compilation du client principal
+
+### Erreurs courantes
+
+1. **Fichier main.js manquant** : Lancez `npm run gulp compile-client`
+2. **Modifications non visibles** : Suivez la procédure complète ci-dessus
+3. **Cache persistant** : Supprimez `src2`, `out`, et `out/vs`
+
+### Fichiers importants à modifier
+
+- **Interface d'onboarding** : `src/vs/workbench/contrib/void/browser/react/src/void-onboarding/VoidOnboarding.tsx`
+- **Autres composants React** : Dans `src/vs/workbench/contrib/void/browser/react/src/`
+
+### Vérification des modifications
+
+Toujours vérifier que vos modifications sont dans le fichier `src2` correspondant avant de relancer l'application :
+
+```bash
+# Exemple pour vérifier une modification dans VoidOnboarding
+grep -A 5 -B 5 "Welcome to Vault Code" src/vs/workbench/contrib/void/browser/react/src2/void-onboarding/VoidOnboarding.tsx
+```
+
+### Bonnes pratiques
+
+1. ❌ **Ne jamais** lancer `pnpm dev` ou `pnpm build` (causera des conflits)
+2. ✅ **Toujours** utiliser `npm run buildreact` pour les composants React
+3. ✅ **Toujours** supprimer les caches en cas de doute
+4. ✅ **Toujours** vérifier `src2` avant de relancer l'app
+5. ✅ **Utiliser TypeScript** avec des types props bien définis (pas React.FN)
+
+### En cas de problème persistant
+
+Si les modifications ne sont toujours pas visibles après la procédure :
+
+1. Vérifiez les erreurs dans la console
+2. Vérifiez que le fichier `out/main.js` existe
+3. Redémarrez complètement le terminal
+4. Répétez la procédure complète depuis l'étape 1
+
+---
+
+**Rappel** : Ce système de build spécifique à VaultCode nécessite cette procédure pour chaque modification React. C'est normal et nécessaire pour le bon fonctionnement du préfixage CSS et de la compilation.
