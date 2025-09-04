@@ -33,10 +33,10 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Setup Node.js 18
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"
           cache: "npm"
 
       - name: Cache intelligent VaultCode
@@ -50,6 +50,11 @@ jobs:
           restore-keys: |
             vaultcode-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
             vaultcode-${{ runner.os }}-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libkrb5-dev libgssapi-krb5-2
 
       - name: Install dependencies
         run: |
