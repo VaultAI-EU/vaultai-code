@@ -7,7 +7,7 @@ on:
 
 jobs:
   test-build:
-    runs-on: warp-ubuntu-latest-x64-16x # Runner ultra-rapide WarpBuild
+    runs-on: ubuntu-latest # Temporaire - remplace par warp-ubuntu-latest-x64-16x quand WarpBuild est connecté
 
     steps:
       - name: Checkout VaultCode
