@@ -33,7 +33,14 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libkrb5-dev libgssapi-krb5-2
+          sudo apt-get install -y \
+            libkrb5-dev \
+            libgssapi-krb5-2 \
+            libx11-dev \
+            libxkbfile-dev \
+            build-essential \
+            python3-dev \
+            pkg-config
 
       - name: Install dependencies
         run: npm ci --no-audit
