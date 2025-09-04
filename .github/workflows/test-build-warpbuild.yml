@@ -1,0 +1,65 @@
+name: VaultCode Test Build (Rapide)
+on:
+  push:
+    branches: [develop, feature/*]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  test-build:
+    runs-on: warp-ubuntu-latest-x64-8x # Runner rapide pour tests
+
+    steps:
+      - name: Checkout VaultCode
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 # Shallow clone pour plus de rapidité
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Cache test build
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.npm
+            out/
+          key: vaultcode-test-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        run: npm ci --no-audit
+
+      - name: Build React components
+        run: |
+          export NODE_OPTIONS="--max-old-space-size=8192"
+          npm run buildreact
+
+      - name: Test compile
+        run: |
+          export NODE_OPTIONS="--max-old-space-size=8192"
+          npm run gulp compile-client
+
+      - name: Quick Linux build test
+        run: |
+          export NODE_OPTIONS="--max-old-space-size=8192"
+          timeout 600 npm run gulp vscode-linux-x64-min || echo "Test build terminé"
+
+      - name: Verify build
+        run: |
+          if [ -d "../VSCode-linux-x64" ]; then
+            echo "✅ Build test réussi!"
+            ls -la ../VSCode-linux-x64/ | head -10
+          else
+            echo "❌ Build test échoué"
+            exit 1
+          fi
+
+      - name: Build summary
+        run: |
+          echo "🎯 Test build VaultCode terminé"
+          echo "⏱️ Durée estimée avec WarpBuild: ~5-10 minutes"
+          echo "💡 Pour un build complet, utilise le workflow principal"

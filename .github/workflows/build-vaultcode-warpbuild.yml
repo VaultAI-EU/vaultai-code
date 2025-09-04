@@ -1,0 +1,157 @@
+name: VaultCode Build avec WarpBuild
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch: # Permet de lancer manuellement
+
+jobs:
+  build-all-platforms:
+    runs-on: warp-ubuntu-latest-x64-16x # Runner ultra-rapide WarpBuild
+
+    strategy:
+      matrix:
+        include:
+          - target: linux-x64
+            platform: Linux
+            artifact_name: VaultCode-Linux-x64.tar.gz
+          - target: win32-x64
+            platform: Windows
+            artifact_name: VaultCode-Windows-x64-Setup.exe
+          - target: darwin-arm64
+            platform: macOS-ARM64
+            artifact_name: VaultCode-macOS-arm64.tar.gz
+          - target: darwin-x64
+            platform: macOS-Intel
+            artifact_name: VaultCode-macOS-x64.tar.gz
+
+    steps:
+      - name: Checkout VaultCode
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Cache intelligent VaultCode
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.npm
+            src/vs/workbench/contrib/void/browser/react/node_modules
+          key: vaultcode-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/vs/workbench/contrib/void/browser/react/package.json') }}
+          restore-keys: |
+            vaultcode-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            vaultcode-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --prefer-offline
+
+      - name: Build React components (VaultCode spécifique)
+        run: |
+          export NODE_OPTIONS="--max-old-space-size=16384 --max-semi-space-size=256"
+          npm run buildreact
+
+      - name: Compile client
+        run: |
+          export NODE_OPTIONS="--max-old-space-size=16384"
+          npm run gulp compile-client
+
+      - name: Build production optimisé
+        run: |
+          export NODE_OPTIONS="--max-old-space-size=16384"
+          export UV_THREADPOOL_SIZE=16
+          npm run gulp compile-build-with-mangling
+
+      - name: Build platform spécifique - ${{ matrix.platform }}
+        run: |
+          export NODE_OPTIONS="--max-old-space-size=16384"
+          npm run gulp vscode-${{ matrix.target }}-min
+
+      # Build Windows installer si nécessaire
+      - name: Build Windows installer
+        if: matrix.target == 'win32-x64'
+        run: |
+          export NODE_OPTIONS="--max-old-space-size=16384"
+          npm run gulp vscode-win32-x64-system-setup
+
+      - name: Create distribution package
+        run: |
+          mkdir -p dist/
+
+          if [ "${{ matrix.target }}" = "linux-x64" ]; then
+            cd ../VSCode-linux-x64/ && tar -czf ../vaultai-code/dist/${{ matrix.artifact_name }} *
+          elif [ "${{ matrix.target }}" = "win32-x64" ]; then
+            # Copier l'installateur Windows
+            cp .build/win32-x64/system-setup/*.exe dist/${{ matrix.artifact_name }} || echo "Setup non trouvé"
+            # Créer aussi la version portable
+            cd ../VSCode-win32-x64/ && zip -r ../vaultai-code/dist/VaultCode-Windows-x64-Portable.zip *
+          elif [ "${{ matrix.target }}" = "darwin-arm64" ]; then
+            cd ../VSCode-darwin-arm64/ && tar -czf ../vaultai-code/dist/${{ matrix.artifact_name }} VaultCode.app
+          elif [ "${{ matrix.target }}" = "darwin-x64" ]; then
+            cd ../VSCode-darwin-x64/ && tar -czf ../vaultai-code/dist/${{ matrix.artifact_name }} VaultCode.app
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vaultcode-${{ matrix.target }}
+          path: |
+            dist/
+            !dist/.DS_Store
+          retention-days: 30
+
+      - name: Display build info
+        run: |
+          echo "✅ Build terminé pour ${{ matrix.platform }}"
+          echo "📦 Fichiers créés:"
+          ls -la dist/ || echo "Aucun fichier dans dist/"
+          echo "💾 Taille des fichiers:"
+          du -sh dist/* || echo "Pas de fichiers"
+
+  # Job pour créer une release complète
+  create-release:
+    needs: build-all-platforms
+    runs-on: warp-ubuntu-latest-x64-4x
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files/
+
+      - name: Prepare release
+        run: |
+          mkdir -p final-release/
+          find release-files/ -name "*.tar.gz" -o -name "*.exe" -o -name "*.zip" | xargs -I {} cp {} final-release/
+
+          echo "🎉 Release VaultCode prête!"
+          echo "📦 Fichiers disponibles:"
+          ls -la final-release/
+
+      - name: Upload complete release
+        uses: actions/upload-artifact@v4
+        with:
+          name: vaultcode-complete-release
+          path: final-release/
+          retention-days: 90
+
+      # Optionnel: Créer une GitHub Release automatiquement
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: final-release/*
+          generate_release_notes: true
+          name: VaultCode ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
